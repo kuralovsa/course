@@ -14,30 +14,7 @@
 
 ### Диаграмма 1. Базовый поток (без деталей формата)
 
-```mermaid
-flowchart TD
-    A[Пользовательское приложение: iMessage] -->|Отправка/получение WebP| B[Sandbox iMessage]
-    B -->|Вызов системного API| C[ImageIO.framework]
-    C -->|Использует| D[libwebp (динамическая библиотека)]
-    
-    D -->|Версия 1.3.1| E[Уязвимость heap buffer overflow]
-    D -->|Версия 1.3.2| F[Исправленная версия]
-    
-    E -->|CVE-2023-4863| G[Ошибка при распаковке WebP]
-    E -->|CVE-2023-41064 (BlastBass)| G
-    
-    G -->|Приводит к| H[Краш / выполнение кода]
-    
-    subgraph Платформы
-        I[iOS] --> C
-        J[macOS] --> C
-        K[Android] -->|Использует собственную реализацию libwebp| L[Аналогичные уязвимости]
-    end
-    
-    style E fill:#f9f,stroke:#333,stroke-width:2px
-    style G fill:#f66,stroke:#333,stroke-width:2px
-    style H fill:#f66,stroke:#333,stroke-width:2px
-```
+<img width="3108" height="3306" alt="deepseek_mermaid_20260902_1abde8" src="https://github.com/user-attachments/assets/c278c264-f82a-4b36-897d-4c92e5cac1b5" />
 
 **Описание:**  
 Показывает общий путь от iMessage до libwebp, зависимость от версии и последствия.
