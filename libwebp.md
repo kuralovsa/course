@@ -400,3 +400,178 @@ size accounting so the second-level tables can no longer overflow), confirming
 **Итог:** диаграмма наглядно связывает низкоуровневые механизмы сжатия (VP8, дерево Хаффмана) с системными компонентами безопасности и показывает точку, где происходит «прорыв» защиты.
 
 
+------
+
+````bash
+asd@asds-Mac-mini fuzz-webp-mac % clang -g -O1 -fsanitize=fuzzer,address \
+  -I libwebp-1.3.1/src \
+  harness/craft.c \
+  libwebp-1.3.1/build/libwebp.a \
+  -o craft
+harness/craft.c:5:10: fatal error: 'malloc.h' file not found
+    5 | #include <malloc.h>
+      |          ^~~~~~~~~~
+1 error generated.
+asd@asds-Mac-mini fuzz-webp-mac % nano harness/craft.c
+````
+````bash
+asd@asds-Mac-mini fuzz-webp-mac % nano harness/craft.c
+#comment the line #include <malloc.h>
+asd@asds-Mac-mini fuzz-webp-mac % clang -g -O1 -fsanitize=fuzzer,address \
+  -I libwebp-1.3.1/src \
+  harness/craft.c \
+  libwebp-1.3.1/build/libwebp.a \
+  -o craft
+asd@asds-Mac-mini fuzz-webp-mac % ls
+bad.webp                        craft.dSYM                      fuzz_webp_patched.dSYM          harness                         libwebp-1.3.2
+corpus                          findings                        fuzz_webp_vulnerable            libwebp-1.3.1                   libwebp-1.3.2.tar.gz
+craft                           fuzz_webp_patched               fuzz_webp_vulnerable.dSYM       libwebp-1.3.1.tar.gz
+asd@asds-Mac-mini fuzz-webp-mac % ./craft
+USAGE: craft bad.webp%                                                                                                                                                                                           asd@asds-Mac-mini fuzz-webp-mac % ls
+bad.webp                        craft.dSYM                      fuzz_webp_patched.dSYM          harness                         libwebp-1.3.2
+corpus                          findings                        fuzz_webp_vulnerable            libwebp-1.3.1                   libwebp-1.3.2.tar.gz
+craft                           fuzz_webp_patched               fuzz_webp_vulnerable.dSYM       libwebp-1.3.1.tar.gz
+asd@asds-Mac-mini fuzz-webp-mac % ./craft bad1.webp
+asd@asds-Mac-mini fuzz-webp-mac % ls
+bad.webp                        craft                           fuzz_webp_patched               fuzz_webp_vulnerable.dSYM       libwebp-1.3.1.tar.gz
+bad1.webp                       craft.dSYM                      fuzz_webp_patched.dSYM          harness                         libwebp-1.3.2
+corpus                          findings                        fuzz_webp_vulnerable            libwebp-1.3.1                   libwebp-1.3.2.tar.gz
+asd@asds-Mac-mini fuzz-webp-mac
+````
+
+````bash
+MallocNanoZone=0 ./fuzz_webp_patched    bad1.webp
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2533055076
+INFO: Loaded 1 modules   (4922 inline 8-bit counters): 4922 [0x104fd07c8, 0x104fd1b02),
+INFO: Loaded 1 PC tables (4922 PCs): 4922 [0x104fd1b08,0x104fe4ea8),
+./fuzz_webp_patched: Running 1 inputs 1 time(s) each.
+Running: bad1.webp
+Executed bad1.webp in 0 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***
+asd@asds-Mac-mini fuzz-webp-mac % MallocNanoZone=0 ./fuzz_webp_vulnerable    bad1.webp
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2596159996
+INFO: Loaded 1 modules   (4898 inline 8-bit counters): 4898 [0x1024307c8, 0x102431aea),
+INFO: Loaded 1 PC tables (4898 PCs): 4898 [0x102431af0,0x102444d10),
+./fuzz_webp_vulnerable: Running 1 inputs 1 time(s) each.
+Running: bad1.webp
+=================================================================
+==15842==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x626000002f28 at pc 0x0001023da2d8 bp 0x00016dac99f0 sp 0x00016dac99e8
+WRITE of size 4 at 0x626000002f28 thread T0
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023da2d4"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023d7af8"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10236c604"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023607ec"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10236a094"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102370008"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10236f0fc"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102336c88"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023f9dcc"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023e5224"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023ea43c"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102418e58"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x188f77dfc"
+    #0 0x0001023da2d4 in BuildHuffmanTable+0x2678 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000a62d4)
+    #1 0x0001023d7af8 in VP8LBuildHuffmanTable+0x124 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000a3af8)
+    #2 0x00010236c604 in ReadHuffmanCode+0x338 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x100038604)
+    #3 0x0001023607ec in DecodeImageStream+0x1614 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10002c7ec)
+    #4 0x00010236a094 in VP8LDecodeHeader+0x294 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x100036094)
+    #5 0x000102370008 in DecodeInto+0x338 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10003c008)
+    #6 0x00010236f0fc in WebPDecodeRGBAInto+0x174 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10003b0fc)
+    #7 0x000102336c88 in LLVMFuzzerTestOneInput+0x2c8 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x100002c88)
+    #8 0x0001023f9dcc in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)+0x134 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000c5dcc)
+    #9 0x0001023e5224 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long)+0xe8 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000b1224)
+    #10 0x0001023ea43c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long))+0x1cfc (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000b643c)
+    #11 0x000102418e58 in main+0x24 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000e4e58)
+    #12 0x000188f77dfc in start+0x1b4c (/usr/lib/dyld:arm64e+0x1fdfc)
+
+0x626000002f28 is located 0 bytes after 11816-byte region [0x626000000100,0x626000002f28)
+allocated by thread T0 here:
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102c8d40c"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10235fd7c"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10236a094"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102370008"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x10236f0fc"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102336c88"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023f9dcc"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023e5224"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023ea43c"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x102418e58"
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x188f77dfc"
+    #0 0x000102c8d40c in malloc+0x70 (/opt/homebrew/Cellar/llvm/23.1.0/lib/clang/23/lib/darwin/libclang_rt.asan_osx_dynamic.dylib:arm64+0x5540c)
+    #1 0x00010235fd7c in DecodeImageStream+0xba4 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10002bd7c)
+    #2 0x00010236a094 in VP8LDecodeHeader+0x294 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x100036094)
+    #3 0x000102370008 in DecodeInto+0x338 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10003c008)
+    #4 0x00010236f0fc in WebPDecodeRGBAInto+0x174 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x10003b0fc)
+    #5 0x000102336c88 in LLVMFuzzerTestOneInput+0x2c8 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x100002c88)
+    #6 0x0001023f9dcc in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)+0x134 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000c5dcc)
+    #7 0x0001023e5224 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long)+0xe8 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000b1224)
+    #8 0x0001023ea43c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long))+0x1cfc (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000b643c)
+    #9 0x000102418e58 in main+0x24 (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000e4e58)
+    #10 0x000188f77dfc in start+0x1b4c (/usr/lib/dyld:arm64e+0x1fdfc)
+
+==15842==WARNING: Can't read from symbolizer at fd 3
+==15842==WARNING: atos failed to symbolize address "0x1023da2d4"
+SUMMARY: AddressSanitizer: heap-buffer-overflow (/Users/asd/fuzz-webp-mac/fuzz_webp_vulnerable:arm64+0x1000a62d4) in BuildHuffmanTable+0x2678
+Shadow bytes around the buggy address:
+  0x626000002c80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x626000002d00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x626000002d80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x626000002e00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x626000002e80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x626000002f00: 00 00 00 00 00[fa]fa fa fa fa fa fa fa fa fa fa
+  0x626000002f80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x626000003000: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x626000003080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x626000003100: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x626000003180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==15842==ABORTING
+zsh: abort      MallocNanoZone=0 ./fuzz_webp_vulnerable bad1.webp
+````
