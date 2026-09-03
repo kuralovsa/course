@@ -4,7 +4,7 @@
 > **Целевая система:** iOS 26.6.1 (17.08.2026)
 > **Цель:** zero-click RCE через iMessage
 > **Статус:** research завершён по обоим векторам; боевые артефакты готовы;
-> **Ключевой вопрос (backport CVE-2025-43300 на ветку iOS 26) — РАЗРЕШЁН:** RawCamera не менялся в 26.6.0→26.6.1, фикс в 26.6.0 → 43300 закрыт на 26.6.1 (см. `CVE-2025-43300_backport_ios26_6_1.md`)
+> открыт один ключевой вопрос (backport CVE-2025-43300 на ветку iOS 26)
 >
 > Документ **автономен**: содержит все данные, гипотезы, технические детали,
 > таблицы, схемы и планы. Не требует обращения к другим файлам.
@@ -75,7 +75,7 @@
 | **Sandbox Escape** | SVG `feConvolveMatrix` + `pthread_main_thread_np` (TLS/IPC) | **TODO** (sandbox RawCamera; механика — по Вектору A) |
 | **Роль iMessage** | **C2/exfil-канал** (backup channel в imagent) | **Delivery + Trigger** (основная роль) |
 | **Exploited** | Да (Coruna/NSO, 2024) | **Да** ("extremely sophisticated attack", CISA KEV) |
-| **Актуальность для iOS 26.6.1** | **НЕ АКТУАЛЕН** (закрыт в 17.3) — reference | **РАЗРЕШЕНО:** backport в 26.6.0 (RawCamera re-base 140.3.0); 43300 закрыт на 26.6.1 (`CVE-2025-43300_backport_ios26_6_1.md`) |
+| **Актуальность для iOS 26.6.1** | **НЕ АКТУАЛЕН** (закрыт в 17.3) — reference | **КЛЮЧЕВОЙ ВОПРОС:** backport патча на ветку 26? (diff RawCamera 26.6.0 vs 26.6.1) |
 | **Статус артефактов** | Harness + revert-патч + build + LLDB — готовы | Payload-скрипт + DNGViewer + runbook — готовы |
 
 ### 1.4 Сводная матрица статусов (по этапам)
@@ -922,12 +922,12 @@ CIImage field) → arbitrary R/W (через ImageIO/CoreImage объекты) �
 ### 3.6 Оценка актуальности известных CVE и обоснование перехода к Fuzzing
 
 **Все известные iMessage-adjacent CVE закрыты до iOS 17.3** (кроме CVE-2025-43300,
-который закрыт в 18.6.2; **backport на ветку 26 проверен — попал в 26.6.0**). Для iOS 26.6.1:
+который закрыт в 18.6.2 и требует проверки backport на ветку 26). Для iOS 26.6.1:
 
-1. **Backport CVE-2025-43300 на ветку 26 ЕСТЬ (в 26.6.0)** → Вектор Б через 43300 закрыт;
+1. **Если backport CVE-2025-43300 на ветку 26 есть** → Вектор Б через 43300 закрыт;
    нужен **fuzzing-ориентированный поиск** новых багов в iMessage-компонентах
    (imagent, IMTranscoderAgent, IMCore, ImageIO/RawCamera).
-2. ~~Если backport нет~~ — **неактуально**: backport подтверждён в 26.6.0;
+2. **Если backport нет** (или уязвима 26.6.0) → CVE-2025-43300 работает на целевой;
    остаётся upgrade (OOB write → RCE) + sandbox escape.
 
 **Обоснование fuzzing-подхода:**
@@ -1033,9 +1033,8 @@ flowchart LR
 
 ### 5.1 Приоритет 0 — Ключевой вопрос (решает всё)
 
-> **Backport CVE-2025-43300 на ветку iOS 26 — ПРОВЕРЕН (2026-09-03).**
-> Метод: diff RawCamera (blacktop/ipsw-diffs) **26.6.0 vs 26.6.1** → RawCamera не менялся;
-> backport в 26.6.0 (re-base 140.3.0). Результат: **43300 закрыт на 26.6.1**.
+> **Проверить backport CVE-2025-43300 на ветку iOS 26.**
+> Метод: diff RawCamera (ipsw) **26.6.0 vs 26.6.1** (через blacktop/ipsw + BinDiff).
 > Искать: bounds check `output > buffer_end` в `CDNGLosslessJpegUnpacker`
 > (аналог `sub_1B28674F4` на macOS 15.6.1).
 > - **Backport есть** → 43300 закрыт на 26.6.1 → переход к fuzzing (5.2) +
@@ -1141,7 +1140,7 @@ ios26_imessage_rce.py (оркестратор, 7 стадий на вектор)
 ### 5.5 Сводный TODO (приоритизированный)
 
 **Приоритет 0 (решает всё):**
-- [x] **Backport CVE-2025-43300 на iOS 26.6.1** — проверен: RawCamera не менялся в 26.6.0→26.6.1, фикс в 26.6.0, 43300 закрыт (`CVE-2025-43300_backport_ios26_6_1.md`)
+- [ ] **Backport CVE-2025-43300 на iOS 26.6.1** (diff RawCamera 26.6.0 vs 26.6.1)
 
 **Приоритет 1 (Вектор Б — основной):**
 - [ ] Прогон crash oracle (macOS 15.6/15.6.1, runbook готов)
@@ -1224,7 +1223,7 @@ ios26_imessage_rce.py (оркестратор, 7 стадий на вектор)
 | Механика CVE-2024-23222 (cassowary) | **Максимальная** | NVD + Apple + CISA + патч 6471469 (commit-сообщение = наша теория) + harness |
 | Root cause CVE-2025-43300 | **Высокая** | Quarkslab (бинарный diff) + PoC b1n4r1b01 + NVD + Apple |
 | 0-click delivery через iMessage (43300) | **Высокая** | Quarkslab + PoC (Airdrop/iMessage) + WhatsApp-фикс |
-| Backport 43300 на iOS 26.6.1 | **РАЗРЕШЕНО** | RawCamera не менялся в 26.6.0→26.6.1; фикс в 26.6.0; 43300 закрыт |
+| Backport 43300 на iOS 26.6.1 | **НЕИЗВЕСТНО** | TODO (diff RawCamera 26.6.0 vs 26.6.1) |
 | Zero-click WebProcess (link preview) на iOS 26 | **Средняя** | По знаниям (iOS 12–17), TODO верификация |
 | CVE-2023-41990 / CVE-2024-43251 | **Низкая** | Черновик (TODO верификация) |
 | Upgrade OOB write → RCE (43300) | **Средняя** | Модель готова, конкретика — TODO |
