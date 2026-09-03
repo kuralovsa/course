@@ -189,4 +189,113 @@ A/B: payload (краш) vs control (нет краша) — как в нашем 
 
 ---
 
+---
+
+## 10. Фолбэк: CoreGraphics / iMessage-демоны / WebKit (если diff по ImageIO пустой)
+
+**Логика:** пустой diff по TIFF-декодеру = фикс **не в самом умножении**. Overflow-выражение `w*h*SPS*(BPS/8)` вычисляется в ImageIO, но **аллокация буфера** и **bounds-check** часто живут в другом модуле. Apple чинит integer overflow не там, где умножение, а там, где по нему принимают решение (malloc / bounds).
+
+**Шаг 0 (самый быстрый дизамбигуатор):** компонент в Apple security advisory для iOS 26.6.1 назван явно (`ImageIO` / `CoreGraphics` / `WebKit` / `Messages`). Это снимает 2 из 3 вариантов за одну секунду:
+- `ImageIO`, а diff пустой → фикс в зависимом модуле (CG) или в caller'е (демон);
+- `CoreGraphics` → сразу в CG;
+- `Messages` → в демонах;
+- `WebKit` → только если путь через WKWebView.
+
+### 10.1 Приоритет (по убыванию вероятности для чистого TIFF-overflow)
+
+| # | Модуль | Почему именно он | Где искать |
+|---|--------|------------------|------------|
+| **1** | **CoreGraphics** | ImageIO считает `size`, но **CG аллоцирует** буфер (`CGBitmapContextCreate` / `CGImageCreate`). Классическое место фикса: `if (w*h*bpp > MAX) return NULL` — на стороне аллокации, а не умножения | **dsc** |
+| **2** | **iMessage-демоны** (`IMTranscoderAgent`, `imagent`) | Zero-click путь (Вектор Б) идёт через **IMTranscoderAgent** для транскодинга вложений. Демон может **сам** вычислять size с attacker-controlled dims **до** вызова ImageIO → фикс в caller'е | **НЕ в dsc** — отдельные Mach-O из `Root.fs` IPSW |
+| **3** | **WebKit** | Только если контент = **link preview / rich card** в WKWebView. `WebCore::ImageDecoder` имеет свою валидацию size и свой путь аллокации, минуя наш TIFF-путь | **dsc** |
+
+> Частая ошибка: ищешь демоны в dsc — их там **нет**. Они — отдельные Mach-O бинарники в `Root.fs`.
+
+### 10.2 CoreGraphics (dsc)
+
+```bash
+# 10.2.1 Извлечь CG из того же System.dsc (26.6.0 / 26.6.1)
+dyld_info -arch arm64e System.dsc | grep -A6 "CoreGraphics"
+dd if=System.dsc bs=1 skip=$((CG_LOAD - DSC_BASE)) count=$CG_SIZE of=cg_26.6.0
+# повторить для 26.6.1 -> cg_26.6.1
+
+# 10.2.2 Символы аллокации bitmap-контекста
+nm cg_26.6.0 | grep -iE "CGBitmapContext|CGImageCreate" | head -40
+# кандидаты:
+#   CGBitmapContextCreate / CGBitmapContextCreateWithData
+#   CGBitmapContextGetData / CGBitmapContextBytesPerRow
+#   CGImageCreate / CGImageCreateWithDataProvider
+
+# 10.2.3 Diff
+radiff2 cg_26.6.0 cg_26.6.1
+diff <(objdump -d cg_26.6.0 | awk '/<CGBitmapContextCreate>:/,/^$/') \
+     <(objdump -d cg_26.6.1 | awk '/<CGBitmapContextCreate>:/,/^$/') \
+  | grep -nE "^[<>].*(cmp|bcs|bhi|bl.*malloc|mov.*#0x|cbz)"
+```
+
+**Что ищем в diff:** новый `cmp` + `bcs/bhi` **до** `malloc`, либо early-return «size too large» (константа-предел, `cbz` на результат проверки).
+
+### 10.3 iMessage-демоны (из Root.fs IPSW, НЕ dsc)
+
+```bash
+# 10.3.1 Извлечь демоны из IPSW (отдельные Mach-O)
+unzip iOS_26.6.0.ipsw -d ipsw_26.6.0
+unzip iOS_26.6.1.ipsw -d ipsw_26.6.1
+# пути (подтвердить find'ом, имена могут отличаться):
+find ipsw_26.6.0/Root.fs -name "imagent" -o -name "*IMTranscoderAgent*"
+#   Root.fs/usr/libexec/imagent
+#   Root.fs/usr/libexec/com.apple.IMTranscoderAgent
+
+cp ipsw_26.6.0/Root.fs/usr/libexec/imagent imagent_26.6.0
+cp ipsw_26.6.1/Root.fs/usr/libexec/imagent imagent_26.6.1
+# аналогично IMTranscoderAgent -> imta_26.6.0 / imta_26.6.1
+
+# 10.3.2 Diff
+radiff2 imagent_26.6.0 imagent_26.6.1
+radiff2 imta_26.6.0 imta_26.6.1
+
+# 10.3.3 Фокус: transcode/re-encode путь, где dims из header уходят в alloc
+nm imta_26.6.0 | grep -iE "transcode|TIFF|decode|CGImage" | head -40
+objdump -d imta_26.6.0 | grep -nE -A3 "mul w" | grep -B3 "bl.*malloc"
+```
+
+**Фокус:** функция, которая читает `width/height` из TIFF-header вложения и **до** вызова ImageIO вычисляет размер буфера. Если там появился `cmp`/bounds — фикс в caller'е.
+
+### 10.4 WebKit (dsc)
+
+```bash
+# 10.4.1 Извлечь WebKit (большой образ, ~1GB — выделить место)
+dyld_info -arch arm64e System.dsc | grep -A6 "WebKit"
+dd if=System.dsc bs=1 skip=$((WK_LOAD - DSC_BASE)) count=$WK_SIZE of=webkit_26.6.0
+# повторить для 26.6.1
+
+# 10.4.2 Символы image-decoding
+nm webkit_26.6.0 | grep -iE "WebCore::Image|ImageDecoder|ImageFrameLoader" | head -40
+
+# 10.4.3 Diff (только если advisory = WebKit ИЛИ контент = link preview)
+radiff2 webkit_26.6.0 webkit_26.6.1
+diff <(objdump -d webkit_26.6.0 | awk '/<ImageDecoder>:/,/^$/') \
+     <(objdump -d webkit_26.6.1 | awk '/<ImageDecoder>:/,/^$/') \
+  | grep -nE "^[<>].*(cmp|bcs|bhi|bl.*malloc)"
+```
+
+### 10.5 Как подтвердить, что нашли правильный модуль
+
+1. **A/B по crash oracle** (как в `imageio_int_overflow_crash_oracle.md`): payload (краш) vs control (нет) — но брейкпоинт ставим в **CG/демон**, а не в ImageIO.
+2. **Call chain в lldb** на краше: кто **вызвал** ImageIO и кто **аллоцировал** буфер.
+   - аллокация в CG с уже переполненным `size` → фикс в CG;
+   - dims уже кривые на входе в ImageIO → фикс в caller'е (демон).
+3. **Сверка с advisory:** компонент в Apple advisory должен совпасть с модулем, где найден diff.
+
+### 10.6 Чек-лист фолбэка
+
+1. [ ] Компонент из Apple advisory (HT-номер 26.6.1)
+2. [ ] Если advisory = ImageIO, diff пустой → CoreGraphics (10.2)
+3. [ ] Если не CG → IMTranscoderAgent / imagent (10.3, из Root.fs!)
+4. [ ] WebKit (10.4) — только при подтверждённом link-preview-путь
+5. [ ] lldb backtrace на краше: кто аллоцировал, кто вызвал
+6. [ ] Вписать найденный модуль + фикс в `imageio_int_overflow_research.md`
+
+---
+
 **Честно:** без самих IPSW / dsc точные оффсеты и имя символа не вытащить — это требует бинарников обеих версий. План самодостаточен: как только будут `System.dsc` для 26.6.0 и 26.6.1, шаги 1–9 дают точное выражение и символ.
