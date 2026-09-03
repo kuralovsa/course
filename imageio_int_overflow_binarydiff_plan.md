@@ -207,7 +207,31 @@ A/B: payload (краш) vs control (нет краша) — как в нашем 
 2. **Bug class = integer overflow** (подтверждено) → ищем `mul w` + truncation + `malloc` (§4).
 3. **Эффект = RCE** (подтверждено) → overflow даёт OOB write, не просто DoS.
 4. **Нет iMessage-строки** → фолбэк-приоритет: CG (1) > WebKit (2) > демоны (3).
-5. **Researcher = Meta Red Team X** → возможно, есть публичный разбор (поиск по «CVE-2026-65346 Meta Red Team X»).
+5. **Researcher = Meta Red Team X** → слот под публичный writeup: §8.5 (заполнить после получения URL/текста).
+
+
+### 8.5 Публичный writeup CVE-2026-65346 (Meta Red Team X) — СЛОТ
+
+> ⚠️ **Заготовка:** публичный writeup пока не получен/не верифицирован. До получения URL/текста точные функция/оффсеты **не вписывать как факт** — только в этот слот.
+
+| Поле | Значение |
+|---|---|
+| **Источник** | TODO: URL writeup (Meta Red Team X / blog / GitHub / X) |
+| **Функция (символ)** | TODO: e.g. `TIFFDecodeImage`, `TIFFComputeStripSize`, `TIFFGetBufferSize`, `CGBitmapContextCreate` |
+| **Оффсет в ImageIO** | TODO: `imageio_base + 0x...` (arm64e, iOS 26.6.0) |
+| **Точка умножения** | TODO: `mul wN, wM, wK` @ `imageio_base + 0x...` |
+| **Точка аллокации** | TODO: `bl _malloc` / `bl _malloc_zone_malloc` / `CFAllocator` @ offset |
+| **Overflow-выражение** | TODO: `size = (uint32_t)(width * height * SPS * (BPS/8))` или уточнённое |
+| **Фикс в 26.6.1** | TODO: добавленный `cmp`/`bcs`/early-return, переход на `mul x`, константа-лимит |
+| **Crash oracle** | TODO: lldb-брейкпоинт + payload/control из `imageio_int_overflow_crash_oracle.md` |
+| **Уверенность** | низкая (writeup не получен) |
+
+**Как заполнить слот:**
+1. Найти публичный writeup по `CVE-2026-65346` / `Meta Red Team X` / `Nik Tsytsarkin`.
+2. Вписать только подтверждённые значения (функция, offset, instruction, fix).
+3. Если writeup даёт relative offset — сохранить привязку к `imageio_base` и архитектуре arm64e.
+4. Сверить с binary diff (§5) и lldb-верификацией (§7).
+5. После подтверждения перенести значения в §9 / `imageio_int_overflow_research.md` и снять TODO.
 
 ## 9. Аутпут и вписка в PoC
 
@@ -230,7 +254,8 @@ A/B: payload (краш) vs control (нет краша) — как в нашем 
 6. [ ] Зафиксировать выражение + символ + offset
 7. [ ] lldb-верификация (32 vs 64 bit)
 8. [ ] Сверка с Apple advisory (CVE/HT)
-9. [ ] Вписать в PoC + research + oracle, пуш в репо
+9. [ ] Заполнить §8.5 (writeup) или пометить «нет публичного writeup»
+10. [ ] Вписать в PoC + research + oracle, пуш в репо
 
 ---
 
