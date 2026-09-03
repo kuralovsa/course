@@ -81,7 +81,7 @@ python3 ios26_imessage_rce.py --cve CVE-2024-23222 --harness cassowary_harness.j
 - [x] Root cause: SamplesPerPixel=2 (TIFF) + NumComponents=1 (SOF3) → цикл `i < width*2` + decompress() возвращает 2 → OOB write вдвое на строку
 - [x] DNG-файл: точные байты (0x2FD00: 01→02, 0x3E40B: 02→01) — PoC b1n4r1b01
 - [ ] Crash oracle: DNGViewer (CIRawFilter) на macOS 15.6 (vulnerable) vs 15.6.1 (patched)
-- [x] **Backport на iOS 26.6.1 проверен** — RawCamera не менялся в 26.6.0→26.6.1; фикс 43300 в 26.6.0 → **закрыт на 26.6.1** (`CVE-2025-43300_backport_ios26_6_1.md`)
+- [ ] **Проверить backport на iOS 26.6.1** (diff RawCamera 26.6.0 vs 26.6.1)
 - [ ] Exploit chain: OOB write → arbitrary R/W → RCE
 - [ ] Sandbox RawCamera.bundle (seatbelt profile)
 - [ ] Интеграция в framework как stage 3 (Вектор Б)
