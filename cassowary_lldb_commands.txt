@@ -1,0 +1,21 @@
+# cassowary_lldb_commands.txt
+# Прямое утверждение теории "tryGetConstantProperty вызывается дважды
+# (CFA + Constant Folding) с разным результатом" на уязвимом jsc.
+#
+# Запуск:
+#   lldb -- ./build/Release/jsc cassowary_harness.js
+#   (lldb) command source cassowary_lldb_commands.txt
+#   (lldb) c
+#
+# Ожидаемый вывод: breakpoint срабатывает 2+ раза; backtrace [0] идёт через
+# CFA (DFG::CFANode / DFG::DFGDriver::runPhase CFA), backtrace [1] — через
+# Constant Folding. x0 (base) одинаковый, но результат разный:
+#   CFA            -> успех (возвращает float array)
+#   Constant Fold  -> bail (структура уже S2, не в {S1, S3})
+# Это и есть утверждение теории патча 6471469.
+
+breakpoint set -n tryGetConstantProperty
+breakpoint command add -s 0
+  bt 12
+  register read x0
+  continue

@@ -1,0 +1,51 @@
+# cassowary_lldb_commands_v2.txt — прямое утверждение теории патча 6471469.
+#
+# Теория (commit 6471469, дословно):
+#   "CheckStructure O, S1 | S3; GetByOffset O, offset. And S1 -> S2 -> S3
+#    structure transition happens. By changing object concurrently with the
+#    compiler, it is possible that we will constant fold the property with O + S2."
+#
+# Утверждение = 3 наблюдаемых факта на УЯЗВИМОМ jsc:
+#   (1) tryGetConstantProperty вызывается >= 2 раз для одного base (x0)
+#       в рамках одной компиляции: 1-й раз — успех (CFA), 2-й — bail (CF).
+#   (2) Между вызовами object->structure() меняется (S1 -> S2).
+#   (3) В сгенерированном Air-графе есть CheckStructure {S1,S3} + GetByOffset
+#       с зафиксированным (stale) константным значением.
+#
+# Запуск:
+#   lldb -- ./build/Release/jsc cassowary_harness.js
+#   (lldb) command source cassowary_lldb_commands_v2.txt
+#   (lldb) c
+#   (lldb) quit   # после первого CRASH или по таймауту
+
+# --- (1) breakpoint на tryGetConstantProperty (3 overload'а — ловим все) ---
+breakpoint set -n 'JSC::DFG::Graph::tryGetConstantProperty'
+# Fallback: по подстроке (если mangled name отличается):
+# breakpoint set -n 'tryGetConstantProperty'
+
+breakpoint command add -s 0
+  # номер вызова в рамках сессии
+  expr -- (int)(int)0
+  bt 14
+  register read x0 x1 x2
+  # x0 = this (Graph*), x1 = base (JSValue), x2 = structureSet/offset
+  continue
+
+# --- (2) структура объекта: следим за transition S1->S2 ---
+# Отдельный bp на Structure transition (по желанию):
+# breakpoint set -n 'JSC::Structure::transition'
+# breakpoint command add -s 0
+#   expr (JSC::Structure*)$x0
+#   continue
+
+# --- (3) Air-граф: дамп на каждую фазу (из harness: --air) ---
+# В harness уже: JSC.dumpAirGraphAtEachPhase(true) при --air.
+# Ищем в даме: "CheckStructure" с двумя структурами + "GetByOffset" +
+# константу (stale value из S1). Успешный прогон = property access;
+# провал = folded constant "Move $0x..., %x0".
+
+# --- Crash oracle: SIGSEGV в JSON.stringify(structS1) ---
+# При краше:
+#   (lldb) bt
+#   (lldb) register read
+#   (lldb) memory read $x0 -f x8   # JSCell header жертвы
