@@ -15,6 +15,7 @@
 |------|-----------|
 | `ios26_imessage_rce_whitepaper.md` | **Итоговый White Paper** |
 | `CVE-2025-43300_patch_analysis.md` | Разбор патча 43300 (бинарный diff, root cause, PoC) |
+| `CVE-2025-43300_backport_ios26_6_1.md` | **Backport 43300 на iOS 26.6.1** (diff RawCamera 26.6.0 vs 26.6.1 → закрыт в 26.6.0) |
 | `make_dng_payload.py` | Генератор DNG-payload (2 байта) |
 | `DNGViewer.m` | Crash oracle (CIRawFilter) |
 | `dngviewer_crash_oracle_runbook.md` | Сценарий прогона crash oracle |
@@ -37,7 +38,7 @@
 - [x] White Paper (итоговый документ)
 - [x] Вектор A: RCA + патч + harness (reference chain)
 - [x] Вектор Б: root cause CVE-2025-43300 + PoC + crash oracle
-- [ ] **Backport CVE-2025-43300 на iOS 26.6.1** (diff RawCamera 26.6.0 vs 26.6.1)
+- [x] **Backport CVE-2025-43300 на iOS 26.6.1** — проверен: RawCamera не менялся в 26.6.0→26.6.1, фикс в 26.6.0 → **43300 закрыт на 26.6.1** (`CVE-2025-43300_backport_ios26_6_1.md`)
 - [ ] Прогон crash oracle (macOS 15.6/15.6.1)
 - [ ] Upgrade: OOB write → arbitrary R/W → RCE
 - [ ] Fuzzing iMessage-демонов
