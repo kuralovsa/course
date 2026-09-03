@@ -156,13 +156,58 @@ A/B: payload (краш) vs control (нет краша) — как в нашем 
 
 ---
 
-## 8. Сверка с Apple advisory
+## 8. Сверка с Apple advisory — ВЕРИФИЦИРОВАНО (17 Aug 2026)
 
-- Открыть **Apple security advisory для iOS 26.6.1** → найти строку по **ImageIO**.
-- Если там «integer overflow» / «out-of-bounds write» в ImageIO → **подтверждает bug class** и привязывает к конкретной CVE.
-- Записать HT-номер / CVE в `imageio_int_overflow_research.md` (сейчас там TODO).
+**Advisory:** [iOS 26.6.1 / iPadOS 26.6.1](https://support.apple.com/en-us/148282), Released August 17, 2026.
+**Индекс:** [Apple security releases](https://support.apple.com/en-us/100100).
 
----
+### 8.1 Точный компонент — ImageIO, integer overflow (RCE)
+
+| Поле | Значение |
+|---|---|
+| **CVE** | **CVE-2026-65346** |
+| **Компонент** | **ImageIO** |
+| **Impact** | Processing an image may lead to **arbitrary code execution** |
+| **Description** | An **integer overflow** was addressed with improved input validation |
+| **Researcher** | Meta Red Team X — Nik Tsytsarkin |
+| **Released** | 17 Aug 2026 |
+
+> **Подтверждено:** баг класс = integer overflow в ImageIO, эффект = RCE. Это ровно наш PoC-сценарий (`size = (uint32_t)(w*h*SPS*(BPS/8))`). Компонент в advisory = **ImageIO** → фикс должен быть в ImageIO (или в его caller'е). Если diff по TIFF-декодеру пустой — см. §10 (фолбэк CG/демоны/WebKit).
+
+### 8.2 Смежные ImageIO-строки в том же advisory
+
+| CVE | Компонент | Impact | Description | Researcher |
+|---|---|---|---|---|
+| **CVE-2026-65347** | ImageIO | denial-of-service | improved checks | Geonha Lee (@leegn4a) |
+| **CVE-2026-65346** | ImageIO | **arbitrary code execution** | **integer overflow**, improved input validation | Meta Red Team X — Nik Tsytsarkin |
+
+> Две отдельные ImageIO-уязвимости в одном релизе: одна DoS (65347), одна RCE-integer-overflow (65346). Наша цель — **65346**.
+
+### 8.3 Полный список CVE в iOS 26.6.1 (для контекста)
+
+| Компонент | CVE | Impact |
+|---|---|---|
+| Audio | CVE-2026-65339 | leak sensitive user info (logic issue) |
+| **ImageIO** | **CVE-2026-65347** | DoS |
+| **ImageIO** | **CVE-2026-65346** | **RCE (integer overflow)** ← наша цель |
+| IOGPUFamily | CVE-2026-64788 | memory corruption (web content) |
+| Kernel | CVE-2026-65343 | UAF → unexpected termination (remote) |
+| Kernel | CVE-2026-65349 | OOB read → read kernel memory |
+| Kernel | CVE-2026-65330 | corrupt kernel memory |
+| Telephony | CVE-2026-65329 | bypass IPSec auth |
+| WebKit | CVE-2026-64784, 43795, 65338, 65341, 64782, 64781, 65351, 65340, 65337, 65336, 65335, 65333, 65332, 65331, 64715, 64780, 65334, 43794, 64787 | Safari crash / memory corruption |
+| WebKit History | CVE-2026-64778 | leak sensitive data |
+| WebKit Storage | CVE-2026-64779 | Safari crash |
+
+> **Важно:** в advisory **нет** отдельной строки «Messages»/«iMessage» — значит iMessage-демоны в 26.6.1 не патчились. Это **снижает приоритет** фолбэка на IMTranscoderAgent/imagent (§10.3) и **повышает** приоритет CoreGraphics (§10.2) как caller'а ImageIO.
+
+### 8.4 Вывод для плана
+
+1. **Компонент = ImageIO** (подтверждено) → основной diff (§1–7) по ImageIO — правильный.
+2. **Bug class = integer overflow** (подтверждено) → ищем `mul w` + truncation + `malloc` (§4).
+3. **Эффект = RCE** (подтверждено) → overflow даёт OOB write, не просто DoS.
+4. **Нет iMessage-строки** → фолбэк-приоритет: CG (1) > WebKit (2) > демоны (3).
+5. **Researcher = Meta Red Team X** → возможно, есть публичный разбор (поиск по «CVE-2026-65346 Meta Red Team X»).
 
 ## 9. Аутпут и вписка в PoC
 
